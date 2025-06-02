@@ -47,9 +47,6 @@ func main() {
 	apiRouter := router.PathPrefix("/api").Subrouter()
 	apiRouter.Use(handlers.JWTMiddleware(jwtUtil))
 	{
-		// User Profile
-		// apiRouter.HandleFunc("/profile", handlers.GetUserProfile(db)).Methods("GET")
-
 		// Locations
 		apiRouter.HandleFunc("/locations", handlers.CreateLocation(db)).Methods("POST")
 		apiRouter.HandleFunc("/locations/{id}", handlers.DeleteLocation(db)).Methods("DELETE")
