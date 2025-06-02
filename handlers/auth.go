@@ -13,61 +13,66 @@ import (
 )
 
 func Login(db *sql.DB, jwtUtil *utils.JWTUtil) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		var creds struct {
-			Username string `json:"username"`
-			Password string `json:"password"`
-		}
+    return func(w http.ResponseWriter, r *http.Request) {
+        var creds struct {
+            Username string `json:"username"`
+            Password string `json:"password"`
+        }
 
-		if err := json.NewDecoder(r.Body).Decode(&creds); err != nil {
-			responses.SendErrorResponse(w, http.StatusBadRequest, "Invalid request body")
-			return
-		}
+        if err := json.NewDecoder(r.Body).Decode(&creds); err != nil {
+            responses.SendErrorResponse(w, http.StatusBadRequest, "Invalid request format")
+            return
+        }
 
-		var user models.User
-		err := db.QueryRow(`
-			SELECT id, username, email, password, name, photo_url, role 
-			FROM users WHERE username = $1
-		`, creds.Username).Scan(
-			&user.ID, &user.Username, &user.Email, &user.Password,
-			&user.Name, &user.PhotoURL, &user.Role,
-		)
+        if creds.Username == "" || creds.Password == "" {
+            responses.SendErrorResponse(w, http.StatusBadRequest, "Username and password are required")
+            return
+        }
 
-		if err != nil {
-			if err == sql.ErrNoRows {
-				responses.SendErrorResponse(w, http.StatusBadRequest, "Invalid request body")
-			} else {
-				responses.SendErrorResponse(w, http.StatusBadRequest, "Invalid request body")
-			}
-			return
-		}
+        var user models.User
+        err := db.QueryRow(`
+            SELECT id, username, email, password, name, photo_url, role 
+            FROM users WHERE username = $1 OR email = $1
+        `, creds.Username).Scan(
+            &user.ID, &user.Username, &user.Email, &user.Password,
+            &user.Name, &user.PhotoURL, &user.Role,
+        )
 
-		if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(creds.Password)); err != nil {
-			responses.SendErrorResponse(w, http.StatusBadRequest, "Invalid request body")
-			return
-		}
+        if err != nil {
+            if err == sql.ErrNoRows {
+                responses.SendErrorResponse(w, http.StatusUnauthorized, "Invalid username or password")
+            } else {
+                responses.SendErrorResponse(w, http.StatusInternalServerError, "Database error")
+            }
+            return
+        }
 
-		token, err := jwtUtil.GenerateToken(user.ID, user.Role)
-		if err != nil {
-			responses.SendErrorResponse(w, http.StatusBadRequest, "Invalid request body")
-			return
-		}
+        if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(creds.Password)); err != nil {
+            responses.SendErrorResponse(w, http.StatusUnauthorized, "Invalid username or password")
+            return
+        }
 
-		// Prepare user response without sensitive data
-		userResponse := models.UserResponse{
-			ID:       user.ID,
-			Username: user.Username,
-			Email:    user.Email,
-			Name:     user.Name,
-			PhotoURL: user.PhotoURL,
-			Role:     user.Role,
-		}
+        token, err := jwtUtil.GenerateToken(user.ID, user.Role)
+        if err != nil {
+            responses.SendErrorResponse(w, http.StatusInternalServerError, "Failed to generate token")
+            return
+        }
 
-		responses.SendSuccessResponse(w, http.StatusOK, map[string]interface{}{
-			"token": token,
-			"user":  userResponse,
-		})
-	}
+        // Prepare user response without sensitive data
+        userResponse := models.UserResponse{
+            ID:       user.ID,
+            Username: user.Username,
+            Email:    user.Email,
+            Name:     user.Name,
+            PhotoURL: user.PhotoURL,
+            Role:     user.Role,
+        }
+
+        responses.SendSuccessResponse(w, http.StatusOK, map[string]interface{}{
+            "token": token,
+            "user":  userResponse,
+        })
+    }
 }
 
 func Register(db *sql.DB) http.HandlerFunc {
