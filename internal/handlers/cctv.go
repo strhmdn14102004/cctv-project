@@ -6,16 +6,15 @@ import (
 	"net/http"
 	"strconv"
 
-	"cctv-api/models"
-	"cctv-api/responses"
-	"cctv-api/utils"
+	"cctv-api/internal/models"
+	"cctv-api/internal/responses"
+	"cctv-api/internal/utils"
 
 	"github.com/gorilla/mux"
 )
 
 func GetAllCCTVs(db *sql.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		// Get query parameters
 		locationID := r.URL.Query().Get("locationId")
 		isActive := r.URL.Query().Get("isActive")
 
@@ -49,7 +48,7 @@ func GetAllCCTVs(db *sql.DB) http.HandlerFunc {
 
 		rows, err := db.Query(query, args...)
 		if err != nil {
-			responses.SendErrorResponse(w, http.StatusBadRequest, "Invalid request body")
+			responses.SendErrorResponse(w, http.StatusInternalServerError, "Failed to fetch CCTVs")
 			return
 		}
 		defer rows.Close()
@@ -72,7 +71,7 @@ func GetAllCCTVs(db *sql.DB) http.HandlerFunc {
 				&loc.Name,
 			)
 			if err != nil {
-				responses.SendErrorResponse(w, http.StatusBadRequest, "Invalid request body")
+				responses.SendErrorResponse(w, http.StatusInternalServerError, "Failed to scan CCTV data")
 				return
 			}
 
@@ -93,7 +92,7 @@ func GetCCTVByID(db *sql.DB) http.HandlerFunc {
 		vars := mux.Vars(r)
 		id, err := strconv.Atoi(vars["id"])
 		if err != nil {
-			responses.SendErrorResponse(w, http.StatusBadRequest, "Invalid request body")
+			responses.SendErrorResponse(w, http.StatusBadRequest, "Invalid CCTV ID")
 			return
 		}
 
@@ -122,9 +121,9 @@ func GetCCTVByID(db *sql.DB) http.HandlerFunc {
 
 		if err != nil {
 			if err == sql.ErrNoRows {
-				responses.SendErrorResponse(w, http.StatusBadRequest, "Invalid request body")
+				responses.SendErrorResponse(w, http.StatusNotFound, "CCTV not found")
 			} else {
-				responses.SendErrorResponse(w, http.StatusBadRequest, "Invalid request body")
+				responses.SendErrorResponse(w, http.StatusInternalServerError, "Failed to fetch CCTV")
 			}
 			return
 		}
@@ -146,13 +145,11 @@ func CreateCCTV(db *sql.DB) http.HandlerFunc {
 			return
 		}
 
-		// Validate input
 		if err := utils.Validate.Struct(req); err != nil {
 			responses.SendValidationError(w, err)
 			return
 		}
 
-		var id int
 		var thumbnailUrl interface{}
 		if req.ThumbnailURL != nil {
 			thumbnailUrl = *req.ThumbnailURL
@@ -160,6 +157,7 @@ func CreateCCTV(db *sql.DB) http.HandlerFunc {
 			thumbnailUrl = nil
 		}
 
+		var id int
 		err := db.QueryRow(`
 			INSERT INTO cctvs (location_id, name, thumbnail_url, source_url)
 			VALUES ($1, $2, $3, $4)
@@ -168,9 +166,9 @@ func CreateCCTV(db *sql.DB) http.HandlerFunc {
 
 		if err != nil {
 			if err.Error() == `pq: insert or update on table "cctvs" violates foreign key constraint "cctvs_location_id_fkey"` {
-				responses.SendErrorResponse(w, http.StatusBadRequest, "Invalid request body")
+				responses.SendErrorResponse(w, http.StatusBadRequest, "Invalid location ID")
 			} else {
-				responses.SendErrorResponse(w, http.StatusBadRequest, "Invalid request body")
+				responses.SendErrorResponse(w, http.StatusInternalServerError, "Failed to create CCTV")
 			}
 			return
 		}
@@ -184,7 +182,7 @@ func UpdateCCTV(db *sql.DB) http.HandlerFunc {
 		vars := mux.Vars(r)
 		id, err := strconv.Atoi(vars["id"])
 		if err != nil {
-			responses.SendErrorResponse(w, http.StatusBadRequest, "Invalid request body")
+			responses.SendErrorResponse(w, http.StatusBadRequest, "Invalid CCTV ID")
 			return
 		}
 
@@ -194,13 +192,11 @@ func UpdateCCTV(db *sql.DB) http.HandlerFunc {
 			return
 		}
 
-		// Validate input
 		if err := utils.Validate.Struct(req); err != nil {
 			responses.SendValidationError(w, err)
 			return
 		}
 
-		// Build dynamic update query
 		query := "UPDATE cctvs SET updated_at = NOW()"
 		args := []interface{}{}
 		argPos := 1
@@ -237,15 +233,20 @@ func UpdateCCTV(db *sql.DB) http.HandlerFunc {
 
 		query += " WHERE id = $" + strconv.Itoa(argPos)
 		args = append(args, id)
-		argPos++
 
-		_, err = db.Exec(query, args...)
+		result, err := db.Exec(query, args...)
 		if err != nil {
 			if err.Error() == `pq: insert or update on table "cctvs" violates foreign key constraint "cctvs_location_id_fkey"` {
-				responses.SendErrorResponse(w, http.StatusBadRequest, "Invalid request body")
+				responses.SendErrorResponse(w, http.StatusBadRequest, "Invalid location ID")
 			} else {
-				responses.SendErrorResponse(w, http.StatusBadRequest, "Invalid request body")
+				responses.SendErrorResponse(w, http.StatusInternalServerError, "Failed to update CCTV")
 			}
+			return
+		}
+
+		rowsAffected, _ := result.RowsAffected()
+		if rowsAffected == 0 {
+			responses.SendErrorResponse(w, http.StatusNotFound, "CCTV not found")
 			return
 		}
 
@@ -260,13 +261,19 @@ func DeleteCCTV(db *sql.DB) http.HandlerFunc {
 		vars := mux.Vars(r)
 		id, err := strconv.Atoi(vars["id"])
 		if err != nil {
-			responses.SendErrorResponse(w, http.StatusBadRequest, "Invalid request body")
+			responses.SendErrorResponse(w, http.StatusBadRequest, "Invalid CCTV ID")
 			return
 		}
 
-		_, err = db.Exec("DELETE FROM cctvs WHERE id = $1", id)
+		result, err := db.Exec("DELETE FROM cctvs WHERE id = $1", id)
 		if err != nil {
-			responses.SendErrorResponse(w, http.StatusBadRequest, "Invalid request body")
+			responses.SendErrorResponse(w, http.StatusInternalServerError, "Failed to delete CCTV")
+			return
+		}
+
+		rowsAffected, _ := result.RowsAffected()
+		if rowsAffected == 0 {
+			responses.SendErrorResponse(w, http.StatusNotFound, "CCTV not found")
 			return
 		}
 

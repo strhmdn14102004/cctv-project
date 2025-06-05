@@ -5,13 +5,17 @@ import (
 	"fmt"
 	"log"
 
-	"cctv-api/config"
+	"cctv-api/internal/config"
 
-	_ "github.com/lib/pq" // PostgreSQL driver
+	_ "github.com/lib/pq"
 	migrate "github.com/rubenv/sql-migrate"
 )
 
-func InitDB(cfg *config.Config) (*sql.DB, error) {
+type Database struct {
+	DB *sql.DB
+}
+
+func NewDatabase(cfg *config.Config) (*Database, error) {
 	psqlInfo := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable",
 		cfg.DBHost, cfg.DBPort, cfg.DBUser, cfg.DBPassword, cfg.DBName)
 
@@ -20,25 +24,26 @@ func InitDB(cfg *config.Config) (*sql.DB, error) {
 		return nil, fmt.Errorf("failed to open database: %w", err)
 	}
 
-	err = db.Ping()
-	if err != nil {
+	if err = db.Ping(); err != nil {
 		return nil, fmt.Errorf("failed to ping database: %w", err)
 	}
 
 	log.Println("Successfully connected to database")
 
-	// Run migrations
-	err = runMigrations(db)
-	if err != nil {
+	if err = runMigrations(db); err != nil {
 		return nil, fmt.Errorf("failed to run migrations: %w", err)
 	}
 
-	return db, nil
+	return &Database{DB: db}, nil
+}
+
+func (d *Database) Close() error {
+	return d.DB.Close()
 }
 
 func runMigrations(db *sql.DB) error {
 	migrations := &migrate.FileMigrationSource{
-		Dir: "database/migrations",
+		Dir: "migrations",
 	}
 
 	n, err := migrate.Exec(db, "postgres", migrations, migrate.Up)
@@ -46,11 +51,6 @@ func runMigrations(db *sql.DB) error {
 		return err
 	}
 
-	if n > 0 {
-		log.Printf("Applied %d database migrations\n", n)
-	} else {
-		log.Println("No database migrations to apply")
-	}
-
+	log.Printf("Applied %d database migrations\n", n)
 	return nil
 }

@@ -7,25 +7,21 @@ import (
 	"github.com/go-playground/validator/v10"
 )
 
-// ErrorResponse represents a standard error response structure
 type ErrorResponse struct {
 	Success bool   `json:"success"`
 	Message string `json:"message"`
 }
 
-// ValidationError represents a single field validation error
 type ValidationError struct {
 	Field   string `json:"field"`
 	Message string `json:"message"`
 }
 
-// ValidationErrorResponse represents a collection of validation errors
 type ValidationErrorResponse struct {
 	Success bool              `json:"success"`
 	Errors  []ValidationError `json:"errors"`
 }
 
-// SendErrorResponse sends a standard error response
 func SendErrorResponse(w http.ResponseWriter, statusCode int, message string) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(statusCode)
@@ -35,7 +31,6 @@ func SendErrorResponse(w http.ResponseWriter, statusCode int, message string) {
 	})
 }
 
-// SendSuccessResponse sends a standard success response with data
 func SendSuccessResponse(w http.ResponseWriter, statusCode int, data interface{}) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(statusCode)
@@ -45,7 +40,6 @@ func SendSuccessResponse(w http.ResponseWriter, statusCode int, data interface{}
 	})
 }
 
-// SendValidationError sends a validation error response
 func SendValidationError(w http.ResponseWriter, err error) {
 	var errors []ValidationError
 	for _, err := range err.(validator.ValidationErrors) {

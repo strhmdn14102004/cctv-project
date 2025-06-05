@@ -9,7 +9,7 @@ type User struct {
 	Password  string    `json:"-"`
 	Name      string    `json:"name"`
 	PhotoURL  *string   `json:"photoUrl"`
-	Role      string    `json:"role"` // "user" or "developer"
+	Role      string    `json:"role"`
 	CreatedAt time.Time `json:"createdAt"`
 	UpdatedAt time.Time `json:"updatedAt"`
 }

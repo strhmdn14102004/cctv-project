@@ -6,8 +6,8 @@ import (
 	"net/http"
 	"strconv"
 
-	"cctv-api/models"
-	"cctv-api/responses"
+	"cctv-api/internal/models"
+	"cctv-api/internal/responses"
 
 	"github.com/gorilla/mux"
 )
@@ -20,7 +20,7 @@ func GetAllLocations(db *sql.DB) http.HandlerFunc {
 			ORDER BY name ASC
 		`)
 		if err != nil {
-			responses.SendErrorResponse(w, http.StatusInternalServerError, "Database error")
+			responses.SendErrorResponse(w, http.StatusInternalServerError, "Failed to fetch locations")
 			return
 		}
 		defer rows.Close()
@@ -30,7 +30,7 @@ func GetAllLocations(db *sql.DB) http.HandlerFunc {
 			var loc models.Location
 			err := rows.Scan(&loc.ID, &loc.Name, &loc.CreatedAt, &loc.UpdatedAt)
 			if err != nil {
-				responses.SendErrorResponse(w, http.StatusInternalServerError, "Database scan error")
+				responses.SendErrorResponse(w, http.StatusInternalServerError, "Failed to scan location data")
 				return
 			}
 			locations = append(locations, loc)
@@ -80,7 +80,7 @@ func DeleteLocation(db *sql.DB) http.HandlerFunc {
 		var count int
 		err = db.QueryRow("SELECT COUNT(*) FROM cctvs WHERE location_id = $1", id).Scan(&count)
 		if err != nil {
-			responses.SendErrorResponse(w, http.StatusInternalServerError, "Database error")
+			responses.SendErrorResponse(w, http.StatusInternalServerError, "Failed to check location usage")
 			return
 		}
 
@@ -89,9 +89,15 @@ func DeleteLocation(db *sql.DB) http.HandlerFunc {
 			return
 		}
 
-		_, err = db.Exec("DELETE FROM locations WHERE id = $1", id)
+		result, err := db.Exec("DELETE FROM locations WHERE id = $1", id)
 		if err != nil {
 			responses.SendErrorResponse(w, http.StatusInternalServerError, "Failed to delete location")
+			return
+		}
+
+		rowsAffected, _ := result.RowsAffected()
+		if rowsAffected == 0 {
+			responses.SendErrorResponse(w, http.StatusNotFound, "Location not found")
 			return
 		}
 
