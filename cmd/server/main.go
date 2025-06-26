@@ -4,12 +4,15 @@ import (
 	"cctv-api/internal/config"
 	"cctv-api/internal/database"
 	"cctv-api/internal/handlers"
+	"cctv-api/internal/services"
 	"cctv-api/internal/utils"
 	"log"
 	"net/http"
+	"time"
 
 	"github.com/gorilla/mux"
 	"github.com/rs/cors"
+	"golang.org/x/time/rate"
 )
 
 func main() {
@@ -26,10 +29,13 @@ func main() {
 	// Initialize JWT utility
 	jwtUtil := utils.NewJWTUtil(cfg.JWTSecret, cfg.JWTExpiration)
 
+	// Initialize email service
+	emailService := services.NewEmailService(cfg)
+
 	// Create router
 	router := mux.NewRouter()
 
-	// Health check endpoint
+	resetLimiter := rate.NewLimiter(rate.Every(time.Hour), 3) // 3 requests per hour// Health check endpoint
 	router.HandleFunc("/api/health", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte("OK"))
@@ -40,6 +46,9 @@ func main() {
 	{
 		authRouter.HandleFunc("/login", handlers.Login(db.DB, jwtUtil)).Methods("POST")
 		authRouter.HandleFunc("/register", handlers.Register(db.DB)).Methods("POST")
+		authRouter.HandleFunc("/request-device-reset", handlers.RateLimitMiddleware(resetLimiter)(handlers.RequestDeviceReset(db.DB, emailService))).Methods("POST")
+		authRouter.HandleFunc("/confirm-device-reset", handlers.RateLimitMiddleware(resetLimiter)(handlers.ConfirmDeviceReset(db.DB))).Methods("POST")
+
 	}
 
 	// Public routes

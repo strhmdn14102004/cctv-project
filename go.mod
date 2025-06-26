@@ -11,6 +11,7 @@ require (
 	github.com/rs/cors v1.11.1
 	github.com/rubenv/sql-migrate v1.8.0
 	golang.org/x/crypto v0.37.0
+	golang.org/x/time v0.12.0
 )
 
 require (

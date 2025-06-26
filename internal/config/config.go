@@ -17,6 +17,13 @@ type Config struct {
 	DBName        string
 	JWTSecret     string
 	JWTExpiration time.Duration
+
+	// Email configuration
+	SMTPHost     string
+	SMTPPort     string
+	SMTPUsername string
+	SMTPPassword string
+	EmailFrom    string
 }
 
 func LoadConfig() *Config {
@@ -37,6 +44,12 @@ func LoadConfig() *Config {
 		DBName:        getEnv("DB_NAME", "cctv_db"),
 		JWTSecret:     getEnv("JWT_SECRET", "default-secret"),
 		JWTExpiration: expiration,
+
+		SMTPHost:     getEnv("SMTP_HOST", "smtp.gmail.com"),
+		SMTPPort:     getEnv("SMTP_PORT", "587"),
+		SMTPUsername: getEnv("SMTP_USERNAME", "satsat1410@gmail.com"),
+		SMTPPassword: getEnv("SMTP_PASSWORD", "ugzs vdly dptv aekc"),
+		EmailFrom:    getEnv("EMAIL_FROM", "satsat1410@gmail.com"),
 	}
 }
 
