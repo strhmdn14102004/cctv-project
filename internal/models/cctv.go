@@ -23,7 +23,7 @@ type CreateCCTVRequest struct {
 
 type UpdateCCTVRequest struct {
 	LocationID   *int    `json:"locationId"`
-	Name         *string `json:"name"`
+	Name         *string `json:"name" validate:"omitempty"`
 	ThumbnailURL *string `json:"thumbnailUrl"`
 	SourceURL    *string `json:"sourceUrl" validate:"omitempty,url"`
 	IsActive     *bool   `json:"isActive"`

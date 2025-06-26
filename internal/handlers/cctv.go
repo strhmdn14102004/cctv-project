@@ -150,6 +150,29 @@ func CreateCCTV(db *sql.DB) http.HandlerFunc {
 			return
 		}
 
+		// Check for duplicate name
+		var existingID int
+		err := db.QueryRow("SELECT id FROM cctvs WHERE name = $1", req.Name).Scan(&existingID)
+		if err == nil {
+			responses.SendErrorResponse(w, http.StatusConflict,
+				"CCTV with name '"+req.Name+"' already exists (ID: "+strconv.Itoa(existingID)+")")
+			return
+		} else if err != sql.ErrNoRows {
+			responses.SendErrorResponse(w, http.StatusInternalServerError, "Failed to check for duplicate name")
+			return
+		}
+
+		// Check for duplicate source URL
+		err = db.QueryRow("SELECT id, name FROM cctvs WHERE source_url = $1", req.SourceURL).Scan(&existingID, &req.Name)
+		if err == nil {
+			responses.SendErrorResponse(w, http.StatusConflict,
+				"CCTV with this source URL already exists (ID: "+strconv.Itoa(existingID)+", Name: '"+req.Name+"')")
+			return
+		} else if err != sql.ErrNoRows {
+			responses.SendErrorResponse(w, http.StatusInternalServerError, "Failed to check for duplicate source URL")
+			return
+		}
+
 		var thumbnailUrl interface{}
 		if req.ThumbnailURL != nil {
 			thumbnailUrl = *req.ThumbnailURL
@@ -158,7 +181,7 @@ func CreateCCTV(db *sql.DB) http.HandlerFunc {
 		}
 
 		var id int
-		err := db.QueryRow(`
+		err = db.QueryRow(`
 			INSERT INTO cctvs (location_id, name, thumbnail_url, source_url)
 			VALUES ($1, $2, $3, $4)
 			RETURNING id

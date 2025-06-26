@@ -51,15 +51,27 @@ func CreateLocation(db *sql.DB) http.HandlerFunc {
 			return
 		}
 
+		// Check for existing location with same name
+		var existingID int
+		err := db.QueryRow("SELECT id FROM locations WHERE name = $1", loc.Name).Scan(&existingID)
+		if err == nil {
+			responses.SendErrorResponse(w, http.StatusConflict,
+				"Location with name '"+loc.Name+"' already exists (ID: "+strconv.Itoa(existingID)+")")
+			return
+		} else if err != sql.ErrNoRows {
+			responses.SendErrorResponse(w, http.StatusInternalServerError, "Failed to check for duplicate location")
+			return
+		}
+
 		var id int
-		err := db.QueryRow(`
+		err = db.QueryRow(`
 			INSERT INTO locations (name) 
 			VALUES ($1) 
 			RETURNING id
 		`, loc.Name).Scan(&id)
 
 		if err != nil {
-			responses.SendErrorResponse(w, http.StatusConflict, "Location already exists")
+			responses.SendErrorResponse(w, http.StatusInternalServerError, "Failed to create location")
 			return
 		}
 
