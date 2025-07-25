@@ -69,6 +69,7 @@ func GetAllCCTVs(db *sql.DB) http.HandlerFunc {
 
 		query += " ORDER BY l.name ASC, c.name ASC"
 
+		// Only apply limit if account is free
 		if accountStatus == "free" {
 			query += " LIMIT 10"
 		}
