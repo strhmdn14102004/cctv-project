@@ -3,9 +3,10 @@ package handlers
 import (
 	"database/sql"
 	"encoding/json"
+	"log"
 	"net/http"
 	"strconv"
-	"log"
+
 	"cctv-api/internal/models"
 	"cctv-api/internal/responses"
 	"cctv-api/internal/utils"
@@ -15,15 +16,14 @@ import (
 
 func GetAllCCTVs(db *sql.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		// Default value jika tidak ada auth
 		accountStatus := "free"
 		var userID int
 
-		// Cek JWT claims untuk mendapatkan user ID
-		if claims, ok := r.Context().Value("userId").(*utils.Claims); ok {
+		// Get claims from context using the correct key
+		if claims, ok := r.Context().Value(userClaimsKey).(*utils.Claims); ok {
 			userID = claims.UserID
 			
-			// Ambil status akun dari database
+			// Get account status from database
 			err := db.QueryRow(`
 				SELECT account_status 
 				FROM users 
@@ -32,11 +32,10 @@ func GetAllCCTVs(db *sql.DB) http.HandlerFunc {
 			
 			if err != nil {
 				log.Printf("Error getting account status for user %d: %v", userID, err)
-				accountStatus = "free" // Fallback ke free jika error
+				accountStatus = "free"
 			}
 		}
 
-		// Log status akun untuk debugging
 		log.Printf("User %d account status: %s", userID, accountStatus)
 
 		locationID := r.URL.Query().Get("locationId")
@@ -70,7 +69,6 @@ func GetAllCCTVs(db *sql.DB) http.HandlerFunc {
 
 		query += " ORDER BY l.name ASC, c.name ASC"
 
-		// Batasi hanya untuk akun free
 		if accountStatus == "free" {
 			query += " LIMIT 10"
 		}

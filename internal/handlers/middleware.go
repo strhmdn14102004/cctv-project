@@ -9,6 +9,12 @@ import (
 	"cctv-api/internal/utils"
 )
 
+type contextKey string
+
+const (
+	userClaimsKey contextKey = "userClaims"
+)
+
 func JWTMiddleware(jwtUtil *utils.JWTUtil) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -30,8 +36,7 @@ func JWTMiddleware(jwtUtil *utils.JWTUtil) func(http.Handler) http.Handler {
 				return
 			}
 
-			// Pastikan claims.UserID disimpan dengan benar
-			ctx := context.WithValue(r.Context(), "userId", claims)
+			ctx := context.WithValue(r.Context(), userClaimsKey, claims)
 			r = r.WithContext(ctx)
 
 			next.ServeHTTP(w, r)

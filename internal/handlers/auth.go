@@ -142,28 +142,33 @@ func Register(db *sql.DB) http.HandlerFunc {
 
 func UpgradeAccount(db *sql.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		userID := r.Context().Value("userId").(int)
+		if claims, ok := r.Context().Value(userClaimsKey).(*utils.Claims); ok {
+			userID := claims.UserID
 
-		result, err := db.Exec(`
-			UPDATE users 
-			SET account_status = 'paid', updated_at = NOW()
-			WHERE id = $1
-		`, userID)
+			result, err := db.Exec(`
+				UPDATE users 
+				SET account_status = 'paid', updated_at = NOW()
+				WHERE id = $1
+			`, userID)
 
-		if err != nil {
-			responses.SendErrorResponse(w, http.StatusInternalServerError, "Failed to upgrade account")
-			return
+			if err != nil {
+				log.Printf("Error upgrading account for user %d: %v", userID, err)
+				responses.SendErrorResponse(w, http.StatusInternalServerError, "Failed to upgrade account")
+				return
+			}
+
+			rowsAffected, _ := result.RowsAffected()
+			if rowsAffected == 0 {
+				responses.SendErrorResponse(w, http.StatusNotFound, "User not found")
+				return
+			}
+
+			responses.SendSuccessResponse(w, http.StatusOK, map[string]string{
+				"message": "Account upgraded to paid successfully",
+			})
+		} else {
+			responses.SendErrorResponse(w, http.StatusUnauthorized, "Invalid user context")
 		}
-
-		rowsAffected, _ := result.RowsAffected()
-		if rowsAffected == 0 {
-			responses.SendErrorResponse(w, http.StatusNotFound, "User not found")
-			return
-		}
-
-		responses.SendSuccessResponse(w, http.StatusOK, map[string]string{
-			"message": "Account upgraded to paid successfully",
-		})
 	}
 }
 
