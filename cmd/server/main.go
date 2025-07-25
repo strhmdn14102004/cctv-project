@@ -52,9 +52,9 @@ func main() {
 	}
 
 	// Pindahkan endpoint /cctvs dari publicRouter ke apiRouter (authenticated)
-apiRouter := router.PathPrefix("/api").Subrouter()
-apiRouter.Use(handlers.JWTMiddleware(jwtUtil))
-{
+	apiRouter := router.PathPrefix("/api").Subrouter()
+	apiRouter.Use(handlers.JWTMiddleware(jwtUtil))
+	{
     // Locations
     apiRouter.HandleFunc("/locations", handlers.CreateLocation(db.DB)).Methods("POST")
     apiRouter.HandleFunc("/locations/{id:[0-9]+}", handlers.DeleteLocation(db.DB)).Methods("DELETE")
@@ -68,8 +68,8 @@ apiRouter.Use(handlers.JWTMiddleware(jwtUtil))
     apiRouter.HandleFunc("/account/upgrade", handlers.UpgradeAccount(db.DB)).Methods("POST")
 }
 
-// Public routes
-publicRouter := router.PathPrefix("/api/public").Subrouter()
+	// Public routes
+	publicRouter := router.PathPrefix("/api/public").Subrouter()
 {
     publicRouter.HandleFunc("/locations", handlers.GetAllLocations(db.DB)).Methods("GET")
     // Hapus endpoint cctvs dari sini
