@@ -68,6 +68,7 @@ func Login(db *sql.DB, jwtUtil *utils.JWTUtil) http.HandlerFunc {
 			Name:     user.Name,
 			PhotoURL: user.PhotoURL,
 			Role:     user.Role,
+			AccountStatus: user.AccountStatus,
 		}
 
 		responses.SendSuccessResponse(w, http.StatusOK, map[string]interface{}{
@@ -78,46 +79,47 @@ func Login(db *sql.DB, jwtUtil *utils.JWTUtil) http.HandlerFunc {
 }
 
 func Register(db *sql.DB) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		var user struct {
-			Username string  `json:"username" validate:"required"`
-			Email    string  `json:"email" validate:"required,email"`
-			Password string  `json:"password" validate:"required,min=8"`
-			Name     string  `json:"name" validate:"required"`
-			PhotoURL *string `json:"photoUrl"`
-		}
+    return func(w http.ResponseWriter, r *http.Request) {
+        var user struct {
+            Username string  `json:"username" validate:"required"`
+            Email    string  `json:"email" validate:"required,email"`
+            Password string  `json:"password" validate:"required,min=8"`
+            Name     string  `json:"name" validate:"required"`
+            PhotoURL *string `json:"photoUrl"`
+        }
 
-		if err := json.NewDecoder(r.Body).Decode(&user); err != nil {
-			responses.SendErrorResponse(w, http.StatusBadRequest, "Invalid request body")
-			return
-		}
+        if err := json.NewDecoder(r.Body).Decode(&user); err != nil {
+            responses.SendErrorResponse(w, http.StatusBadRequest, "Invalid request body")
+            return
+        }
 
-		hashedPassword, err := bcrypt.GenerateFromPassword([]byte(user.Password), bcrypt.DefaultCost)
-		if err != nil {
-			responses.SendErrorResponse(w, http.StatusInternalServerError, "Failed to hash password")
-			return
-		}
+        hashedPassword, err := bcrypt.GenerateFromPassword([]byte(user.Password), bcrypt.DefaultCost)
+        if err != nil {
+            responses.SendErrorResponse(w, http.StatusInternalServerError, "Failed to hash password")
+            return
+        }
 
-		_, err = db.Exec(`
-			INSERT INTO users (username, email, password, name, photo_url, role) 
-			VALUES ($1, $2, $3, $4, $5, 'user')
-		`, user.Username, user.Email, string(hashedPassword), user.Name, user.PhotoURL)
+        // Tambahkan account_status dengan nilai default 'free'
+        _, err = db.Exec(`
+            INSERT INTO users (username, email, password, name, photo_url, role, account_status) 
+            VALUES ($1, $2, $3, $4, $5, 'user', 'free')
+        `, user.Username, user.Email, string(hashedPassword), user.Name, user.PhotoURL)
 
-		if err != nil {
-			if err.Error() == `pq: duplicate key value violates unique constraint "users_username_key"` {
-				responses.SendErrorResponse(w, http.StatusConflict, "Username already exists")
-			} else if err.Error() == `pq: duplicate key value violates unique constraint "users_email_key"` {
-				responses.SendErrorResponse(w, http.StatusConflict, "Email already exists")
-			} else {
-				responses.SendErrorResponse(w, http.StatusInternalServerError, "Failed to create user")
-			}
-			return
-		}
+        if err != nil {
+            if err.Error() == `pq: duplicate key value violates unique constraint "users_username_key"` {
+                responses.SendErrorResponse(w, http.StatusConflict, "Username already exists")
+            } else if err.Error() == `pq: duplicate key value violates unique constraint "users_email_key"` {
+                responses.SendErrorResponse(w, http.StatusConflict, "Email already exists")
+            } else {
+                responses.SendErrorResponse(w, http.StatusInternalServerError, "Failed to create user")
+            }
+            return
+        }
 
-		responses.SendSuccessResponse(w, http.StatusCreated, map[string]string{
-			"message": "User registered successfully",
-		})
-	}
+        responses.SendSuccessResponse(w, http.StatusCreated, map[string]string{
+            "message": "User registered successfully with free account",
+        })
+    }
 }
 
 func RateLimitMiddleware(limiter *rate.Limiter) func(http.HandlerFunc) http.HandlerFunc {

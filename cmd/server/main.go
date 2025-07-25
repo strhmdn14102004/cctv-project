@@ -71,6 +71,9 @@ func main() {
 		apiRouter.HandleFunc("/cctvs", handlers.CreateCCTV(db.DB)).Methods("POST")
 		apiRouter.HandleFunc("/cctvs/{id:[0-9]+}", handlers.UpdateCCTV(db.DB)).Methods("PUT")
 		apiRouter.HandleFunc("/cctvs/{id:[0-9]+}", handlers.DeleteCCTV(db.DB)).Methods("DELETE")
+
+		apiRouter.HandleFunc("/payment/request", handlers.RequestPayment(db.DB)).Methods("GET")
+    	apiRouter.HandleFunc("/payment/confirm", handlers.ConfirmPayment(db.DB)).Methods("POST")
 	}
 
 	// CORS configuration

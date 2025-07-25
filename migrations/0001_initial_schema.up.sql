@@ -7,6 +7,8 @@ CREATE TABLE IF NOT EXISTS users (
     name TEXT NOT NULL,
     photo_url TEXT,
     role TEXT NOT NULL DEFAULT 'user',
+    account_status TEXT NOT NULL DEFAULT 'free',
+    payment_date TIMESTAMP WITH TIME ZONE,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
@@ -38,8 +40,8 @@ INSERT INTO locations (name) VALUES
 ('Makassar'), ('Palembang'), ('Balikpapan'), ('Batam'), ('Pekanbaru')
 ON CONFLICT (name) DO NOTHING;
 
-INSERT INTO users (username, email, password, name, role) VALUES
-('admin', 'admin@cctv.app', '$2a$10$X8z5sZ5JZ5Z5Z5Z5Z5Z5.e5Z5Z5Z5Z5Z5Z5Z5Z5Z5Z5Z5Z5Z5', 'Admin', 'admin')
+INSERT INTO users (username, email, password, name, role, account_status) VALUES
+('admin', 'admin@cctv.app', '$2a$10$X8z5sZ5JZ5Z5Z5Z5Z5Z5.e5Z5Z5Z5Z5Z5Z5Z5Z5Z5Z5Z5Z5Z5', 'Admin', 'admin', 'paid')
 ON CONFLICT (username) DO NOTHING;
 
 -- +migrate Down
