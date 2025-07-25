@@ -4,11 +4,11 @@ import (
 	"database/sql"
 	"fmt"
 	"log"
+	"time"
 
 	"cctv-api/internal/config"
 
 	_ "github.com/lib/pq"
-	migrate "github.com/rubenv/sql-migrate"
 )
 
 type Database struct {
@@ -19,38 +19,44 @@ func NewDatabase(cfg *config.Config) (*Database, error) {
 	psqlInfo := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable",
 		cfg.DBHost, cfg.DBPort, cfg.DBUser, cfg.DBPassword, cfg.DBName)
 
-	db, err := sql.Open("postgres", psqlInfo)
-	if err != nil {
-		return nil, fmt.Errorf("failed to open database: %w", err)
+	// Tambahkan retry mechanism untuk koneksi database
+	var db *sql.DB
+	var err error
+	maxRetries := 5
+	retryDelay := 2 * time.Second
+
+	for i := 0; i < maxRetries; i++ {
+		db, err = sql.Open("postgres", psqlInfo)
+		if err != nil {
+			log.Printf("Failed to open database (attempt %d/%d): %v", i+1, maxRetries, err)
+			time.Sleep(retryDelay)
+			continue
+		}
+
+		err = db.Ping()
+		if err != nil {
+			log.Printf("Failed to ping database (attempt %d/%d): %v", i+1, maxRetries, err)
+			db.Close()
+			time.Sleep(retryDelay)
+			continue
+		}
+		break
 	}
 
-	if err = db.Ping(); err != nil {
-		return nil, fmt.Errorf("failed to ping database: %w", err)
+	if err != nil {
+		return nil, fmt.Errorf("failed to connect to database after %d attempts: %w", maxRetries, err)
 	}
 
 	log.Println("Successfully connected to database")
 
-	if err = runMigrations(db); err != nil {
-		return nil, fmt.Errorf("failed to run migrations: %w", err)
-	}
+	// Set connection pool settings
+	db.SetMaxOpenConns(25)
+	db.SetMaxIdleConns(25)
+	db.SetConnMaxLifetime(5 * time.Minute)
 
 	return &Database{DB: db}, nil
 }
 
 func (d *Database) Close() error {
 	return d.DB.Close()
-}
-
-func runMigrations(db *sql.DB) error {
-	migrations := &migrate.FileMigrationSource{
-		Dir: "migrations",
-	}
-
-	n, err := migrate.Exec(db, "postgres", migrations, migrate.Up)
-	if err != nil {
-		return err
-	}
-
-	log.Printf("Applied %d database migrations\n", n)
-	return nil
 }
