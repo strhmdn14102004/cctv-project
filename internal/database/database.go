@@ -19,7 +19,6 @@ func NewDatabase(cfg *config.Config) (*Database, error) {
 	psqlInfo := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable",
 		cfg.DBHost, cfg.DBPort, cfg.DBUser, cfg.DBPassword, cfg.DBName)
 
-	// Tambahkan retry mechanism untuk koneksi database
 	var db *sql.DB
 	var err error
 	maxRetries := 5
@@ -33,9 +32,19 @@ func NewDatabase(cfg *config.Config) (*Database, error) {
 			continue
 		}
 
+		// Test connection with a simple query
 		err = db.Ping()
 		if err != nil {
 			log.Printf("Failed to ping database (attempt %d/%d): %v", i+1, maxRetries, err)
+			db.Close()
+			time.Sleep(retryDelay)
+			continue
+		}
+
+		// Verify tables exist
+		_, err = db.Exec("SELECT 1 FROM users LIMIT 1")
+		if err != nil {
+			log.Printf("Users table check failed (attempt %d/%d): %v", i+1, maxRetries, err)
 			db.Close()
 			time.Sleep(retryDelay)
 			continue
@@ -49,7 +58,7 @@ func NewDatabase(cfg *config.Config) (*Database, error) {
 
 	log.Println("Successfully connected to database")
 
-	// Set connection pool settings
+	// Optimize connection pool
 	db.SetMaxOpenConns(25)
 	db.SetMaxIdleConns(25)
 	db.SetConnMaxLifetime(5 * time.Minute)

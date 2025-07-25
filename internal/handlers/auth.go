@@ -89,28 +89,46 @@ func Register(db *sql.DB) http.HandlerFunc {
 		}
 
 		if err := json.NewDecoder(r.Body).Decode(&user); err != nil {
-			responses.SendErrorResponse(w, http.StatusBadRequest, "Invalid request body")
+			responses.SendErrorResponse(w, http.StatusBadRequest, "Invalid request body: "+err.Error())
+			return
+		}
+
+		// Validasi input
+		if len(user.Password) < 8 {
+			responses.SendErrorResponse(w, http.StatusBadRequest, "Password must be at least 8 characters")
 			return
 		}
 
 		hashedPassword, err := bcrypt.GenerateFromPassword([]byte(user.Password), bcrypt.DefaultCost)
 		if err != nil {
-			responses.SendErrorResponse(w, http.StatusInternalServerError, "Failed to hash password")
+			responses.SendErrorResponse(w, http.StatusInternalServerError, "Failed to hash password: "+err.Error())
 			return
+		}
+
+		// Handle photo URL jika nil
+		var photoUrl interface{}
+		if user.PhotoURL != nil {
+			photoUrl = *user.PhotoURL
+		} else {
+			photoUrl = nil
 		}
 
 		_, err = db.Exec(`
 			INSERT INTO users (username, email, password, name, photo_url, role, account_status) 
 			VALUES ($1, $2, $3, $4, $5, 'user', 'free')
-		`, user.Username, user.Email, string(hashedPassword), user.Name, user.PhotoURL)
+		`, user.Username, user.Email, string(hashedPassword), user.Name, photoUrl)
 
 		if err != nil {
+			// Log error lengkap untuk debugging
+			log.Printf("Database error during registration: %v", err)
+			
 			if err.Error() == `pq: duplicate key value violates unique constraint "users_username_key"` {
 				responses.SendErrorResponse(w, http.StatusConflict, "Username already exists")
 			} else if err.Error() == `pq: duplicate key value violates unique constraint "users_email_key"` {
 				responses.SendErrorResponse(w, http.StatusConflict, "Email already exists")
 			} else {
-				responses.SendErrorResponse(w, http.StatusInternalServerError, "Failed to create user")
+				// Tampilkan error yang lebih spesifik
+				responses.SendErrorResponse(w, http.StatusInternalServerError, "Failed to create user: "+err.Error())
 			}
 			return
 		}
