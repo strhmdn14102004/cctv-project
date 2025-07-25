@@ -15,6 +15,15 @@ import (
 
 func GetAllCCTVs(db *sql.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		accountStatus := "free" // default
+		if claims, ok := r.Context().Value("userId").(*utils.Claims); ok {
+			err := db.QueryRow("SELECT account_status FROM users WHERE id = $1", claims.UserID).
+				Scan(&accountStatus)
+			if err != nil {
+				accountStatus = "free"
+			}
+		}
+
 		locationID := r.URL.Query().Get("locationId")
 		isActive := r.URL.Query().Get("isActive")
 
@@ -44,7 +53,11 @@ func GetAllCCTVs(db *sql.DB) http.HandlerFunc {
 			}
 		}
 
-		query += " ORDER BY l.name ASC, c.name ASC"
+		if accountStatus == "free" {
+			query += " ORDER BY RANDOM() LIMIT 10"
+		} else {
+			query += " ORDER BY l.name ASC, c.name ASC"
+		}
 
 		rows, err := db.Query(query, args...)
 		if err != nil {
@@ -86,6 +99,7 @@ func GetAllCCTVs(db *sql.DB) http.HandlerFunc {
 		responses.SendSuccessResponse(w, http.StatusOK, cctvs)
 	}
 }
+
 
 func GetCCTVByID(db *sql.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {

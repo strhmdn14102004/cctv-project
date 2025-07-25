@@ -1,3 +1,4 @@
+// internal/models/user.go
 package models
 
 import "time"
@@ -10,6 +11,7 @@ type User struct {
 	Name             string     `json:"name"`
 	PhotoURL         *string    `json:"photoUrl"`
 	Role             string     `json:"role"`
+	AccountStatus    string     `json:"accountStatus"`
 	DeviceID         *string    `json:"-"`
 	ResetRequested   bool       `json:"-"`
 	ResetToken       *string    `json:"-"`
@@ -19,12 +21,13 @@ type User struct {
 }
 
 type UserResponse struct {
-	ID       int     `json:"id"`
-	Username string  `json:"username"`
-	Email    string  `json:"email"`
-	Name     string  `json:"name"`
-	PhotoURL *string `json:"photoUrl"`
-	Role     string  `json:"role"`
+	ID            int     `json:"id"`
+	Username      string  `json:"username"`
+	Email         string  `json:"email"`
+	Name          string  `json:"name"`
+	PhotoURL      *string `json:"photoUrl"`
+	Role          string  `json:"role"`
+	AccountStatus string  `json:"accountStatus"`
 }
 
 type ResetRequest struct {

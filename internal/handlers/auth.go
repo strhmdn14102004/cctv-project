@@ -34,11 +34,11 @@ func Login(db *sql.DB, jwtUtil *utils.JWTUtil) http.HandlerFunc {
 
 		var user models.User
 		err := db.QueryRow(`
-			SELECT id, username, email, password, name, photo_url, role 
+			SELECT id, username, email, password, name, photo_url, role, account_status 
 			FROM users WHERE username = $1 OR email = $1
 		`, creds.Username).Scan(
 			&user.ID, &user.Username, &user.Email, &user.Password,
-			&user.Name, &user.PhotoURL, &user.Role,
+			&user.Name, &user.PhotoURL, &user.Role, &user.AccountStatus,
 		)
 
 		if err != nil {
@@ -62,12 +62,13 @@ func Login(db *sql.DB, jwtUtil *utils.JWTUtil) http.HandlerFunc {
 		}
 
 		userResponse := models.UserResponse{
-			ID:       user.ID,
-			Username: user.Username,
-			Email:    user.Email,
-			Name:     user.Name,
-			PhotoURL: user.PhotoURL,
-			Role:     user.Role,
+			ID:            user.ID,
+			Username:      user.Username,
+			Email:         user.Email,
+			Name:          user.Name,
+			PhotoURL:      user.PhotoURL,
+			Role:          user.Role,
+			AccountStatus: user.AccountStatus,
 		}
 
 		responses.SendSuccessResponse(w, http.StatusOK, map[string]interface{}{
@@ -99,8 +100,8 @@ func Register(db *sql.DB) http.HandlerFunc {
 		}
 
 		_, err = db.Exec(`
-			INSERT INTO users (username, email, password, name, photo_url, role) 
-			VALUES ($1, $2, $3, $4, $5, 'user')
+			INSERT INTO users (username, email, password, name, photo_url, role, account_status) 
+			VALUES ($1, $2, $3, $4, $5, 'user', 'free')
 		`, user.Username, user.Email, string(hashedPassword), user.Name, user.PhotoURL)
 
 		if err != nil {
@@ -119,6 +120,34 @@ func Register(db *sql.DB) http.HandlerFunc {
 		})
 	}
 }
+
+func UpgradeAccount(db *sql.DB) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		userID := r.Context().Value("userId").(int)
+
+		result, err := db.Exec(`
+			UPDATE users 
+			SET account_status = 'paid', updated_at = NOW()
+			WHERE id = $1
+		`, userID)
+
+		if err != nil {
+			responses.SendErrorResponse(w, http.StatusInternalServerError, "Failed to upgrade account")
+			return
+		}
+
+		rowsAffected, _ := result.RowsAffected()
+		if rowsAffected == 0 {
+			responses.SendErrorResponse(w, http.StatusNotFound, "User not found")
+			return
+		}
+
+		responses.SendSuccessResponse(w, http.StatusOK, map[string]string{
+			"message": "Account upgraded to paid successfully",
+		})
+	}
+}
+
 
 func RateLimitMiddleware(limiter *rate.Limiter) func(http.HandlerFunc) http.HandlerFunc {
 	return func(next http.HandlerFunc) http.HandlerFunc {
