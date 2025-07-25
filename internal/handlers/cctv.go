@@ -3,7 +3,6 @@ package handlers
 import (
 	"database/sql"
 	"encoding/json"
-	"log"
 	"net/http"
 	"strconv"
 
@@ -16,28 +15,6 @@ import (
 
 func GetAllCCTVs(db *sql.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		accountStatus := "free"
-		var userID int
-
-		// Get claims from context using the correct key
-		if claims, ok := r.Context().Value(userClaimsKey).(*utils.Claims); ok {
-			userID = claims.UserID
-			
-			// Get account status from database
-			err := db.QueryRow(`
-				SELECT account_status 
-				FROM users 
-				WHERE id = $1
-			`, userID).Scan(&accountStatus)
-			
-			if err != nil {
-				log.Printf("Error getting account status for user %d: %v", userID, err)
-				accountStatus = "free"
-			}
-		}
-
-		log.Printf("User %d account status: %s", userID, accountStatus)
-
 		locationID := r.URL.Query().Get("locationId")
 		isActive := r.URL.Query().Get("isActive")
 
@@ -69,14 +46,8 @@ func GetAllCCTVs(db *sql.DB) http.HandlerFunc {
 
 		query += " ORDER BY l.name ASC, c.name ASC"
 
-		// Only apply limit if account status is free
-		if accountStatus != "paid" {
-			query += " LIMIT 10"
-		}
-
 		rows, err := db.Query(query, args...)
 		if err != nil {
-			log.Printf("Error querying CCTVs: %v", err)
 			responses.SendErrorResponse(w, http.StatusInternalServerError, "Failed to fetch CCTVs")
 			return
 		}
@@ -100,8 +71,7 @@ func GetAllCCTVs(db *sql.DB) http.HandlerFunc {
 				&loc.Name,
 			)
 			if err != nil {
-				log.Printf("Error scanning CCTV data: %v", err)
-				responses.SendErrorResponse(w, http.StatusInternalServerError, "Failed to process CCTV data")
+				responses.SendErrorResponse(w, http.StatusInternalServerError, "Failed to scan CCTV data")
 				return
 			}
 
@@ -109,19 +79,13 @@ func GetAllCCTVs(db *sql.DB) http.HandlerFunc {
 				cctv.ThumbnailURL = &thumbnailUrl.String
 			}
 			cctv.Location = &loc
+
 			cctvs = append(cctvs, cctv)
 		}
 
-		response := map[string]interface{}{
-			"account_status": accountStatus,
-			"count":          len(cctvs),
-			"data":           cctvs,
-		}
-
-		responses.SendSuccessResponse(w, http.StatusOK, response)
+		responses.SendSuccessResponse(w, http.StatusOK, cctvs)
 	}
 }
-
 
 func GetCCTVByID(db *sql.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
