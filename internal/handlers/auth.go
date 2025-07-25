@@ -68,7 +68,7 @@ func Login(db *sql.DB, jwtUtil *utils.JWTUtil) http.HandlerFunc {
 			Name:     user.Name,
 			PhotoURL: user.PhotoURL,
 			Role:     user.Role,
-			AccountStatus: user.AccountStatus,
+			// AccountStatus: user.AccountStatus,
 		}
 
 		responses.SendSuccessResponse(w, http.StatusOK, map[string]interface{}{
