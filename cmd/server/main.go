@@ -51,29 +51,30 @@ func main() {
 
 	}
 
-	// Public routes
-	publicRouter := router.PathPrefix("/api/public").Subrouter()
-	{
-		publicRouter.HandleFunc("/locations", handlers.GetAllLocations(db.DB)).Methods("GET")
-		publicRouter.HandleFunc("/cctvs", handlers.GetAllCCTVs(db.DB)).Methods("GET")
-		publicRouter.HandleFunc("/cctvs/{id:[0-9]+}", handlers.GetCCTVByID(db.DB)).Methods("GET")
-	}
+	// Pindahkan endpoint /cctvs dari publicRouter ke apiRouter (authenticated)
+apiRouter := router.PathPrefix("/api").Subrouter()
+apiRouter.Use(handlers.JWTMiddleware(jwtUtil))
+{
+    // Locations
+    apiRouter.HandleFunc("/locations", handlers.CreateLocation(db.DB)).Methods("POST")
+    apiRouter.HandleFunc("/locations/{id:[0-9]+}", handlers.DeleteLocation(db.DB)).Methods("DELETE")
 
-	// Authenticated routes
-	apiRouter := router.PathPrefix("/api").Subrouter()
-	apiRouter.Use(handlers.JWTMiddleware(jwtUtil))
-	{
-		// Locations
-		apiRouter.HandleFunc("/locations", handlers.CreateLocation(db.DB)).Methods("POST")
-		apiRouter.HandleFunc("/locations/{id:[0-9]+}", handlers.DeleteLocation(db.DB)).Methods("DELETE")
+    // CCTVs
+    apiRouter.HandleFunc("/cctvs", handlers.GetAllCCTVs(db.DB)).Methods("GET") // Dipindahkan ke sini
+    apiRouter.HandleFunc("/cctvs", handlers.CreateCCTV(db.DB)).Methods("POST")
+    apiRouter.HandleFunc("/cctvs/{id:[0-9]+}", handlers.UpdateCCTV(db.DB)).Methods("PUT")
+    apiRouter.HandleFunc("/cctvs/{id:[0-9]+}", handlers.DeleteCCTV(db.DB)).Methods("DELETE")
 
-		// CCTVs
-		apiRouter.HandleFunc("/cctvs", handlers.CreateCCTV(db.DB)).Methods("POST")
-		apiRouter.HandleFunc("/cctvs/{id:[0-9]+}", handlers.UpdateCCTV(db.DB)).Methods("PUT")
-		apiRouter.HandleFunc("/cctvs/{id:[0-9]+}", handlers.DeleteCCTV(db.DB)).Methods("DELETE")
+    apiRouter.HandleFunc("/account/upgrade", handlers.UpgradeAccount(db.DB)).Methods("POST")
+}
 
-		apiRouter.HandleFunc("/account/upgrade", handlers.UpgradeAccount(db.DB)).Methods("POST")
-	}
+// Public routes
+publicRouter := router.PathPrefix("/api/public").Subrouter()
+{
+    publicRouter.HandleFunc("/locations", handlers.GetAllLocations(db.DB)).Methods("GET")
+    // Hapus endpoint cctvs dari sini
+    publicRouter.HandleFunc("/cctvs/{id:[0-9]+}", handlers.GetCCTVByID(db.DB)).Methods("GET")
+}
 
 	// CORS configuration
 	corsHandler := cors.New(cors.Options{
