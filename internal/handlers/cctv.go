@@ -3,8 +3,10 @@ package handlers
 import (
 	"database/sql"
 	"encoding/json"
+	"math/rand"
 	"net/http"
 	"strconv"
+	"time"
 
 	"cctv-api/internal/models"
 	"cctv-api/internal/responses"
@@ -13,107 +15,121 @@ import (
 	"github.com/gorilla/mux"
 )
 
-// internal/handlers/cctv.go
 func GetAllCCTVs(db *sql.DB) http.HandlerFunc {
-    return func(w http.ResponseWriter, r *http.Request) {
-        // Get user ID from context if authenticated
-        userID, _ := r.Context().Value("userId").(int)
-        
-        locationID := r.URL.Query().Get("locationId")
-        isActive := r.URL.Query().Get("isActive")
+	return func(w http.ResponseWriter, r *http.Request) {
+		// Get user account status from JWT claims
+		claims, ok := r.Context().Value("claims").(*utils.Claims)
+		if !ok {
+			// If no claims (public access), treat as free account
+			claims = &utils.Claims{Role: "public", UserID: 0}
+		}
 
-        query := `
-            SELECT 
-                c.id, c.name, c.thumbnail_url, c.source_url, c.is_active, c.created_at, c.updated_at,
-                l.id as location_id, l.name as location_name
-            FROM cctvs c
-            JOIN locations l ON c.location_id = l.id
-            WHERE 1=1
-        `
-        args := []interface{}{}
-        argPos := 1
+		locationID := r.URL.Query().Get("locationId")
+		isActive := r.URL.Query().Get("isActive")
 
-        if locationID != "" {
-            query += " AND l.id = $" + strconv.Itoa(argPos)
-            args = append(args, locationID)
-            argPos++
-        }
+		baseQuery := `
+			SELECT 
+				c.id, c.name, c.thumbnail_url, c.source_url, c.is_active, c.created_at, c.updated_at,
+				l.id as location_id, l.name as location_name
+			FROM cctvs c
+			JOIN locations l ON c.location_id = l.id
+			WHERE 1=1
+		`
+		args := []interface{}{}
+		argPos := 1
 
-        if isActive != "" {
-            active, err := strconv.ParseBool(isActive)
-            if err == nil {
-                query += " AND c.is_active = $" + strconv.Itoa(argPos)
-                args = append(args, active)
-                argPos++
-            }
-        }
+		if locationID != "" {
+			baseQuery += " AND l.id = $" + strconv.Itoa(argPos)
+			args = append(args, locationID)
+			argPos++
+		}
 
-        // Check if user is authenticated and has paid account
-        var isPaid bool
-        if userID != 0 {
-            var accountStatus string
-            err := db.QueryRow("SELECT account_status FROM users WHERE id = $1", userID).Scan(&accountStatus)
-            if err == nil && accountStatus == "paid" {
-                isPaid = true
-            }
-        }
+		if isActive != "" {
+			active, err := strconv.ParseBool(isActive)
+			if err == nil {
+				baseQuery += " AND c.is_active = $" + strconv.Itoa(argPos)
+				args = append(args, active)
+				argPos++
+			}
+		}
 
-        // If user is not paid, limit to 3 CCTVs
-        if !isPaid {
-            query += " ORDER BY l.name ASC, c.name ASC LIMIT 3"
-        } else {
-            query += " ORDER BY l.name ASC, c.name ASC"
-        }
+		baseQuery += " ORDER BY l.name ASC, c.name ASC"
 
-        rows, err := db.Query(query, args...)
-        if err != nil {
-            responses.SendErrorResponse(w, http.StatusInternalServerError, "Failed to fetch CCTVs")
-            return
-        }
-        defer rows.Close()
+		// Check if user is authenticated and has paid account
+		var query string
+		if claims.Role != "public" {
+			// Get user account status
+			var accountStatus string
+			err := db.QueryRow("SELECT account_status FROM users WHERE id = $1", claims.UserID).Scan(&accountStatus)
+			if err != nil {
+				responses.SendErrorResponse(w, http.StatusInternalServerError, "Failed to verify account status")
+				return
+			}
 
-        var cctvs []models.CCTV
-        for rows.Next() {
-            var cctv models.CCTV
-            var thumbnailUrl sql.NullString
-            var loc models.Location
+			if accountStatus == "paid" {
+				query = baseQuery
+			} else {
+				query = baseQuery + " LIMIT 10"
+			}
+		} else {
+			// For public/unauthenticated access, limit to 10 random CCTVs
+			query = baseQuery + " ORDER BY RANDOM() LIMIT 10"
+		}
 
-            err := rows.Scan(
-                &cctv.ID,
-                &cctv.Name,
-                &thumbnailUrl,
-                &cctv.SourceURL,
-                &cctv.IsActive,
-                &cctv.CreatedAt,
-                &cctv.UpdatedAt,
-                &loc.ID,
-                &loc.Name,
-            )
-            if err != nil {
-                responses.SendErrorResponse(w, http.StatusInternalServerError, "Failed to scan CCTV data")
-                return
-            }
+		rows, err := db.Query(query, args...)
+		if err != nil {
+			responses.SendErrorResponse(w, http.StatusInternalServerError, "Failed to fetch CCTVs")
+			return
+		}
+		defer rows.Close()
 
-            if thumbnailUrl.Valid {
-                cctv.ThumbnailURL = &thumbnailUrl.String
-            }
-            cctv.Location = &loc
+		var cctvs []models.CCTV
+		for rows.Next() {
+			var cctv models.CCTV
+			var thumbnailUrl sql.NullString
+			var loc models.Location
 
-            cctvs = append(cctvs, cctv)
-        }
+			err := rows.Scan(
+				&cctv.ID,
+				&cctv.Name,
+				&thumbnailUrl,
+				&cctv.SourceURL,
+				&cctv.IsActive,
+				&cctv.CreatedAt,
+				&cctv.UpdatedAt,
+				&loc.ID,
+				&loc.Name,
+			)
+			if err != nil {
+				responses.SendErrorResponse(w, http.StatusInternalServerError, "Failed to scan CCTV data")
+				return
+			}
 
-        // Add message for free accounts
-        if userID != 0 && !isPaid && len(cctvs) >= 3 {
-            responses.SendSuccessResponse(w, http.StatusOK, map[string]interface{}{
-                "cctvs": cctvs,
-                "message": "Anda menggunakan akun gratis. Untuk akses semua CCTV, silahkan bayar Rp 15.000 untuk akses seumur hidup.",
-                "payment_url": "/api/payment/request", // Endpoint untuk request pembayaran
-            })
-            return
-        }
+			if thumbnailUrl.Valid {
+				cctv.ThumbnailURL = &thumbnailUrl.String
+			}
+			cctv.Location = &loc
 
-        responses.SendSuccessResponse(w, http.StatusOK, cctvs)
-    }
+			cctvs = append(cctvs, cctv)
+		}
+
+		// If free account and no specific location filter, shuffle the results
+		if claims.Role != "public" && locationID == "" {
+			var accountStatus string
+			err := db.QueryRow("SELECT account_status FROM users WHERE id = $1", claims.UserID).Scan(&accountStatus)
+			if err == nil && accountStatus == "free" {
+				rand.Seed(time.Now().UnixNano())
+				rand.Shuffle(len(cctvs), func(i, j int) {
+					cctvs[i], cctvs[j] = cctvs[j], cctvs[i]
+				})
+				if len(cctvs) > 10 {
+					cctvs = cctvs[:10]
+				}
+			}
+		}
+
+		responses.SendSuccessResponse(w, http.StatusOK, cctvs)
+	}
 }
 
 func GetCCTVByID(db *sql.DB) http.HandlerFunc {
