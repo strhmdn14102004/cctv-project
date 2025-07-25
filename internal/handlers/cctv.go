@@ -3,10 +3,8 @@ package handlers
 import (
 	"database/sql"
 	"encoding/json"
-	"math/rand"
 	"net/http"
 	"strconv"
-	"time"
 
 	"cctv-api/internal/models"
 	"cctv-api/internal/responses"
@@ -17,17 +15,10 @@ import (
 
 func GetAllCCTVs(db *sql.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		// Get user account status from JWT claims
-		claims, ok := r.Context().Value("claims").(*utils.Claims)
-		if !ok {
-			// If no claims (public access), treat as free account
-			claims = &utils.Claims{Role: "public", UserID: 0}
-		}
-
 		locationID := r.URL.Query().Get("locationId")
 		isActive := r.URL.Query().Get("isActive")
 
-		baseQuery := `
+		query := `
 			SELECT 
 				c.id, c.name, c.thumbnail_url, c.source_url, c.is_active, c.created_at, c.updated_at,
 				l.id as location_id, l.name as location_name
@@ -39,7 +30,7 @@ func GetAllCCTVs(db *sql.DB) http.HandlerFunc {
 		argPos := 1
 
 		if locationID != "" {
-			baseQuery += " AND l.id = $" + strconv.Itoa(argPos)
+			query += " AND l.id = $" + strconv.Itoa(argPos)
 			args = append(args, locationID)
 			argPos++
 		}
@@ -47,34 +38,13 @@ func GetAllCCTVs(db *sql.DB) http.HandlerFunc {
 		if isActive != "" {
 			active, err := strconv.ParseBool(isActive)
 			if err == nil {
-				baseQuery += " AND c.is_active = $" + strconv.Itoa(argPos)
+				query += " AND c.is_active = $" + strconv.Itoa(argPos)
 				args = append(args, active)
 				argPos++
 			}
 		}
 
-		baseQuery += " ORDER BY l.name ASC, c.name ASC"
-
-		// Check if user is authenticated and has paid account
-		var query string
-		if claims.Role != "public" {
-			// Get user account status
-			var accountStatus string
-			err := db.QueryRow("SELECT account_status FROM users WHERE id = $1", claims.UserID).Scan(&accountStatus)
-			if err != nil {
-				responses.SendErrorResponse(w, http.StatusInternalServerError, "Failed to verify account status")
-				return
-			}
-
-			if accountStatus == "paid" {
-				query = baseQuery
-			} else {
-				query = baseQuery + " LIMIT 10"
-			}
-		} else {
-			// For public/unauthenticated access, limit to 10 random CCTVs
-			query = baseQuery + " ORDER BY RANDOM() LIMIT 10"
-		}
+		query += " ORDER BY l.name ASC, c.name ASC"
 
 		rows, err := db.Query(query, args...)
 		if err != nil {
@@ -111,21 +81,6 @@ func GetAllCCTVs(db *sql.DB) http.HandlerFunc {
 			cctv.Location = &loc
 
 			cctvs = append(cctvs, cctv)
-		}
-
-		// If free account and no specific location filter, shuffle the results
-		if claims.Role != "public" && locationID == "" {
-			var accountStatus string
-			err := db.QueryRow("SELECT account_status FROM users WHERE id = $1", claims.UserID).Scan(&accountStatus)
-			if err == nil && accountStatus == "free" {
-				rand.Seed(time.Now().UnixNano())
-				rand.Shuffle(len(cctvs), func(i, j int) {
-					cctvs[i], cctvs[j] = cctvs[j], cctvs[i]
-				})
-				if len(cctvs) > 10 {
-					cctvs = cctvs[:10]
-				}
-			}
 		}
 
 		responses.SendSuccessResponse(w, http.StatusOK, cctvs)

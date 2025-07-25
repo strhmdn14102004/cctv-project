@@ -34,11 +34,11 @@ func Login(db *sql.DB, jwtUtil *utils.JWTUtil) http.HandlerFunc {
 
 		var user models.User
 		err := db.QueryRow(`
-			SELECT id, username, email, password, name, photo_url, role, account_status 
+			SELECT id, username, email, password, name, photo_url, role 
 			FROM users WHERE username = $1 OR email = $1
 		`, creds.Username).Scan(
 			&user.ID, &user.Username, &user.Email, &user.Password,
-			&user.Name, &user.PhotoURL, &user.Role, &user.AccountStatus,
+			&user.Name, &user.PhotoURL, &user.Role,
 		)
 
 		if err != nil {
@@ -62,13 +62,12 @@ func Login(db *sql.DB, jwtUtil *utils.JWTUtil) http.HandlerFunc {
 		}
 
 		userResponse := models.UserResponse{
-			ID:            user.ID,
-			Username:      user.Username,
-			Email:         user.Email,
-			Name:          user.Name,
-			PhotoURL:      user.PhotoURL,
-			Role:          user.Role,
-			AccountStatus: user.AccountStatus,
+			ID:       user.ID,
+			Username: user.Username,
+			Email:    user.Email,
+			Name:     user.Name,
+			PhotoURL: user.PhotoURL,
+			Role:     user.Role,
 		}
 
 		responses.SendSuccessResponse(w, http.StatusOK, map[string]interface{}{
@@ -100,8 +99,8 @@ func Register(db *sql.DB) http.HandlerFunc {
 		}
 
 		_, err = db.Exec(`
-			INSERT INTO users (username, email, password, name, photo_url, role, account_status) 
-			VALUES ($1, $2, $3, $4, $5, 'user', 'free')
+			INSERT INTO users (username, email, password, name, photo_url, role) 
+			VALUES ($1, $2, $3, $4, $5, 'user')
 		`, user.Username, user.Email, string(hashedPassword), user.Name, user.PhotoURL)
 
 		if err != nil {
