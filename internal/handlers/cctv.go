@@ -16,27 +16,25 @@ import (
 
 func GetAllCCTVs(db *sql.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		// Default to free account status
 		accountStatus := "free"
-		var userID int
-
-		// Get claims from context using the correct key
+		
+		// Get account status from JWT claims first
 		if claims, ok := r.Context().Value(userClaimsKey).(*utils.Claims); ok {
-			userID = claims.UserID
-			
-			// Get account status from database
+			// Get user account status from database
 			err := db.QueryRow(`
 				SELECT account_status 
 				FROM users 
 				WHERE id = $1
-			`, userID).Scan(&accountStatus)
+			`, claims.UserID).Scan(&accountStatus)
 			
 			if err != nil {
-				log.Printf("Error getting account status for user %d: %v", userID, err)
-				accountStatus = "free"
+				log.Printf("Error getting account status for user %d: %v", claims.UserID, err)
+				accountStatus = "free" // Default to free if there's an error
 			}
 		}
 
-		log.Printf("User %d account status: %s", userID, accountStatus)
+		log.Printf("Account status for this request: %s", accountStatus)
 
 		locationID := r.URL.Query().Get("locationId")
 		isActive := r.URL.Query().Get("isActive")
