@@ -7,7 +7,7 @@ import (
 
 	"cctv-api/internal/config"
 
-	// _ "github.com/lib/pq"
+	_ "github.com/lib/pq"
 	// migrate "github.com/rubenv/sql-migrate"
 )
 
