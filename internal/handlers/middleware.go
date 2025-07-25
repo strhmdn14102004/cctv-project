@@ -30,8 +30,8 @@ func JWTMiddleware(jwtUtil *utils.JWTUtil) func(http.Handler) http.Handler {
 				return
 			}
 
-			ctx := context.WithValue(r.Context(), "userId", claims.UserID)
-			ctx = context.WithValue(ctx, "userRole", claims.Role)
+			// Pastikan claims.UserID disimpan dengan benar
+			ctx := context.WithValue(r.Context(), "userId", claims)
 			r = r.WithContext(ctx)
 
 			next.ServeHTTP(w, r)

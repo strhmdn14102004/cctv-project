@@ -15,14 +15,29 @@ import (
 
 func GetAllCCTVs(db *sql.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		accountStatus := "free" // default
+		// Default value jika tidak ada auth
+		accountStatus := "free"
+		var userID int
+
+		// Cek JWT claims untuk mendapatkan user ID
 		if claims, ok := r.Context().Value("userId").(*utils.Claims); ok {
-			err := db.QueryRow("SELECT account_status FROM users WHERE id = $1", claims.UserID).
-				Scan(&accountStatus)
+			userID = claims.UserID
+			
+			// Ambil status akun dari database
+			err := db.QueryRow(`
+				SELECT account_status 
+				FROM users 
+				WHERE id = $1
+			`, userID).Scan(&accountStatus)
+			
 			if err != nil {
-				accountStatus = "free"
+				log.Printf("Error getting account status for user %d: %v", userID, err)
+				accountStatus = "free" // Fallback ke free jika error
 			}
 		}
+
+		// Log status akun untuk debugging
+		log.Printf("User %d account status: %s", userID, accountStatus)
 
 		locationID := r.URL.Query().Get("locationId")
 		isActive := r.URL.Query().Get("isActive")
@@ -53,17 +68,17 @@ func GetAllCCTVs(db *sql.DB) http.HandlerFunc {
 			}
 		}
 
-		// Urutkan berdasarkan lokasi dan nama CCTV
 		query += " ORDER BY l.name ASC, c.name ASC"
 
-		// Jika akun free, batasi 10 data pertama
+		// Batasi hanya untuk akun free
 		if accountStatus == "free" {
 			query += " LIMIT 10"
 		}
 
 		rows, err := db.Query(query, args...)
 		if err != nil {
-			responses.SendErrorResponse(w, http.StatusInternalServerError, "Failed to fetch CCTVs: "+err.Error())
+			log.Printf("Error querying CCTVs: %v", err)
+			responses.SendErrorResponse(w, http.StatusInternalServerError, "Failed to fetch CCTVs")
 			return
 		}
 		defer rows.Close()
@@ -86,7 +101,8 @@ func GetAllCCTVs(db *sql.DB) http.HandlerFunc {
 				&loc.Name,
 			)
 			if err != nil {
-				responses.SendErrorResponse(w, http.StatusInternalServerError, "Failed to scan CCTV data: "+err.Error())
+				log.Printf("Error scanning CCTV data: %v", err)
+				responses.SendErrorResponse(w, http.StatusInternalServerError, "Failed to process CCTV data")
 				return
 			}
 
@@ -94,15 +110,13 @@ func GetAllCCTVs(db *sql.DB) http.HandlerFunc {
 				cctv.ThumbnailURL = &thumbnailUrl.String
 			}
 			cctv.Location = &loc
-
 			cctvs = append(cctvs, cctv)
 		}
 
-		// Tambahkan informasi status akun dalam response
 		response := map[string]interface{}{
 			"account_status": accountStatus,
-			"data":           cctvs,
 			"count":          len(cctvs),
+			"data":           cctvs,
 		}
 
 		responses.SendSuccessResponse(w, http.StatusOK, response)
