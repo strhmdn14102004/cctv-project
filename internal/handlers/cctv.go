@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"net/http"
 	"strconv"
-	"log"
 
 	"cctv-api/internal/models"
 	"cctv-api/internal/responses"
@@ -54,44 +53,17 @@ func GetAllCCTVs(db *sql.DB) http.HandlerFunc {
 			}
 		}
 
+		// Urutkan berdasarkan lokasi dan nama CCTV
+		query += " ORDER BY l.name ASC, c.name ASC"
+
+		// Jika akun free, batasi 10 data pertama
 		if accountStatus == "free" {
-			// Untuk akun free: ambil 1 CCTV random per kota
-			query = `
-				WITH ranked_cctvs AS (
-					SELECT 
-						c.id, c.name, c.thumbnail_url, c.source_url, c.is_active, 
-						c.created_at, c.updated_at, l.id as location_id, l.name as location_name,
-						ROW_NUMBER() OVER (PARTITION BY l.id ORDER BY RANDOM()) as rn
-					FROM cctvs c
-					JOIN locations l ON c.location_id = l.id
-					WHERE 1=1
-			`
-			if locationID != "" {
-				query += " AND l.id = $" + strconv.Itoa(argPos)
-			}
-			if isActive != "" {
-				active, _ := strconv.ParseBool(isActive)
-				query += " AND c.is_active = $" + strconv.Itoa(len(args)+1)
-				args = append(args, active)
-			}
-			query += `
-				)
-				SELECT 
-					id, name, thumbnail_url, source_url, is_active, 
-					created_at, updated_at, location_id, location_name
-				FROM ranked_cctvs
-				WHERE rn = 1
-				ORDER BY location_name
-			`
-		} else {
-			// Untuk akun paid: tampilkan semua CCTV
-			query += " ORDER BY l.name ASC, c.name ASC"
+			query += " LIMIT 10"
 		}
 
 		rows, err := db.Query(query, args...)
 		if err != nil {
-			log.Printf("Database query error: %v", err)
-			responses.SendErrorResponse(w, http.StatusInternalServerError, "Failed to fetch CCTVs")
+			responses.SendErrorResponse(w, http.StatusInternalServerError, "Failed to fetch CCTVs: "+err.Error())
 			return
 		}
 		defer rows.Close()
@@ -114,8 +86,7 @@ func GetAllCCTVs(db *sql.DB) http.HandlerFunc {
 				&loc.Name,
 			)
 			if err != nil {
-				log.Printf("Data scanning error: %v", err)
-				responses.SendErrorResponse(w, http.StatusInternalServerError, "Failed to scan CCTV data")
+				responses.SendErrorResponse(w, http.StatusInternalServerError, "Failed to scan CCTV data: "+err.Error())
 				return
 			}
 
@@ -130,13 +101,13 @@ func GetAllCCTVs(db *sql.DB) http.HandlerFunc {
 		// Tambahkan informasi status akun dalam response
 		response := map[string]interface{}{
 			"account_status": accountStatus,
-			"cctvs":         cctvs,
+			"data":           cctvs,
+			"count":          len(cctvs),
 		}
 
 		responses.SendSuccessResponse(w, http.StatusOK, response)
 	}
 }
-
 
 func GetCCTVByID(db *sql.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
