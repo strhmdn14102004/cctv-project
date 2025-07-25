@@ -8,7 +8,7 @@ import (
 
 	"cctv-api/internal/config"
 
-	_ "github.com/lib/pq"
+	"github.com/lib/pq"
 )
 
 type Database struct {

@@ -11,6 +11,7 @@ import (
 	"cctv-api/internal/utils"
 
 	"github.com/gorilla/mux"
+	"github.com/lib/pq"
 )
 
 func GetAllCCTVs(db *sql.DB) http.HandlerFunc {
