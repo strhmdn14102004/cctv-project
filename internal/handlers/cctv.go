@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"strconv"
+	"log"
 
 	"cctv-api/internal/models"
 	"cctv-api/internal/responses"
