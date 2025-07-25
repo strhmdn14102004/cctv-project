@@ -4,7 +4,7 @@ import (
 	"database/sql"
 	"net/http"
 
-	"cctv-api/internal/models"
+	// "cctv-api/internal/models"
 	"cctv-api/internal/responses"
 )
 
