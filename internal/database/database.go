@@ -30,9 +30,9 @@ func NewDatabase(cfg *config.Config) (*Database, error) {
 
 	log.Println("Successfully connected to database")
 
-	if err = runMigrations(db); err != nil {
-		return nil, fmt.Errorf("failed to run migrations: %w", err)
-	}
+	// if err = runMigrations(db); err != nil {
+	// 	return nil, fmt.Errorf("failed to run migrations: %w", err)
+	// }
 
 	return &Database{DB: db}, nil
 }
@@ -41,16 +41,16 @@ func (d *Database) Close() error {
 	return d.DB.Close()
 }
 
-func runMigrations(db *sql.DB) error {
-	migrations := &migrate.FileMigrationSource{
-		Dir: "migrations",
-	}
+// func runMigrations(db *sql.DB) error {
+// 	migrations := &migrate.FileMigrationSource{
+// 		Dir: "migrations",
+// 	}
 
-	n, err := migrate.Exec(db, "postgres", migrations, migrate.Up)
-	if err != nil {
-		return err
-	}
+// 	n, err := migrate.Exec(db, "postgres", migrations, migrate.Up)
+// 	if err != nil {
+// 		return err
+// 	}
 
-	log.Printf("Applied %d database migrations\n", n)
-	return nil
-}
+// 	log.Printf("Applied %d database migrations\n", n)
+// 	return nil
+// }
