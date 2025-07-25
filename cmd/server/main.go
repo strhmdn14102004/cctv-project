@@ -42,14 +42,20 @@ func main() {
 	}).Methods("GET")
 
 	// Auth routes
+	// Auth routes tanpa middleware
 	authRouter := router.PathPrefix("/api/auth").Subrouter()
 	{
 		authRouter.HandleFunc("/login", handlers.Login(db.DB, jwtUtil)).Methods("POST")
-		authRouter.HandleFunc("/logout", handlers.Logout(db.DB)).Methods("POST")
 		authRouter.HandleFunc("/register", handlers.Register(db.DB)).Methods("POST")
 		authRouter.HandleFunc("/request-device-reset", handlers.RateLimitMiddleware(resetLimiter)(handlers.RequestDeviceReset(db.DB, emailService))).Methods("POST")
 		authRouter.HandleFunc("/confirm-device-reset", handlers.RateLimitMiddleware(resetLimiter)(handlers.ConfirmDeviceReset(db.DB))).Methods("POST")
+	}
 
+	// Logout dengan middleware JWT
+	authRouterWithMiddleware := router.PathPrefix("/api/auth").Subrouter()
+	authRouterWithMiddleware.Use(handlers.JWTMiddleware(jwtUtil))
+	{
+		authRouterWithMiddleware.HandleFunc("/logout", handlers.Logout(db.DB)).Methods("POST")
 	}
 
 	// Pindahkan endpoint /cctvs dari publicRouter ke apiRouter (authenticated)

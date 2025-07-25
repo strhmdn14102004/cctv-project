@@ -18,6 +18,14 @@ const (
 func JWTMiddleware(jwtUtil *utils.JWTUtil) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			// Skip middleware untuk endpoint tertentu
+			if r.URL.Path == "/api/auth/login" ||
+				r.URL.Path == "/api/auth/register" ||
+				r.URL.Path == "/api/health" {
+				next.ServeHTTP(w, r)
+				return
+			}
+
 			authHeader := r.Header.Get("Authorization")
 			if authHeader == "" {
 				responses.SendErrorResponse(w, http.StatusUnauthorized, "Authorization header is required")
