@@ -12,6 +12,8 @@ type User struct {
 	PhotoURL         *string    `json:"photoUrl"`
 	Role             string     `json:"role"`
 	AccountStatus    string     `json:"accountStatus"`
+	LastLogin        *time.Time `json:"-"`
+	SessionToken     *string    `json:"-"`
 	DeviceID         *string    `json:"-"`
 	ResetRequested   bool       `json:"-"`
 	ResetToken       *string    `json:"-"`

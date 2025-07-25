@@ -3,9 +3,9 @@ package handlers
 import (
 	"database/sql"
 	"encoding/json"
+	"log"
 	"net/http"
 	"time"
-	"log"
 
 	"cctv-api/internal/models"
 	"cctv-api/internal/responses"
@@ -34,12 +34,16 @@ func Login(db *sql.DB, jwtUtil *utils.JWTUtil) http.HandlerFunc {
 		}
 
 		var user models.User
+		var lastLogin sql.NullTime
+		var sessionToken sql.NullString
 		err := db.QueryRow(`
-			SELECT id, username, email, password, name, photo_url, role, account_status 
+			SELECT id, username, email, password, name, photo_url, role, account_status, 
+			last_login, session_token
 			FROM users WHERE username = $1 OR email = $1
 		`, creds.Username).Scan(
 			&user.ID, &user.Username, &user.Email, &user.Password,
 			&user.Name, &user.PhotoURL, &user.Role, &user.AccountStatus,
+			&lastLogin, &sessionToken,
 		)
 
 		if err != nil {
@@ -56,9 +60,31 @@ func Login(db *sql.DB, jwtUtil *utils.JWTUtil) http.HandlerFunc {
 			return
 		}
 
+		// Check if user is already logged in
+		if lastLogin.Valid && sessionToken.Valid {
+			// Check if token is still valid
+			_, err := jwtUtil.ValidateToken(sessionToken.String)
+			if err == nil {
+				responses.SendErrorResponse(w, http.StatusConflict, "User already logged in on another device")
+				return
+			}
+		}
+
 		token, err := jwtUtil.GenerateToken(user.ID, user.Role)
 		if err != nil {
 			responses.SendErrorResponse(w, http.StatusInternalServerError, "Failed to generate token")
+			return
+		}
+
+		// Update last login and session token
+		now := time.Now()
+		_, err = db.Exec(`
+			UPDATE users 
+			SET last_login = $1, session_token = $2 
+			WHERE id = $3
+		`, now, token, user.ID)
+		if err != nil {
+			responses.SendErrorResponse(w, http.StatusInternalServerError, "Failed to update login status")
 			return
 		}
 
@@ -122,7 +148,7 @@ func Register(db *sql.DB) http.HandlerFunc {
 		if err != nil {
 			// Log error lengkap untuk debugging
 			log.Printf("Database error during registration: %v", err)
-			
+
 			if err.Error() == `pq: duplicate key value violates unique constraint "users_username_key"` {
 				responses.SendErrorResponse(w, http.StatusConflict, "Username already exists")
 			} else if err.Error() == `pq: duplicate key value violates unique constraint "users_email_key"` {
@@ -141,15 +167,15 @@ func Register(db *sql.DB) http.HandlerFunc {
 }
 
 func UpgradeAccount(db *sql.DB) http.HandlerFunc {
-    return func(w http.ResponseWriter, r *http.Request) {
-        claims, ok := r.Context().Value(userClaimsKey).(*utils.Claims)
-        if !ok {
-            responses.SendErrorResponse(w, http.StatusUnauthorized, "Invalid user context")
-            return
-        }
-        userID := claims.UserID
+	return func(w http.ResponseWriter, r *http.Request) {
+		claims, ok := r.Context().Value(userClaimsKey).(*utils.Claims)
+		if !ok {
+			responses.SendErrorResponse(w, http.StatusUnauthorized, "Invalid user context")
+			return
+		}
+		userID := claims.UserID
 
-        result, err := db.Exec(`
+		result, err := db.Exec(`
             UPDATE users 
             SET account_status = 'paid', 
                 fixed_cctv_ids = NULL, 
@@ -157,24 +183,23 @@ func UpgradeAccount(db *sql.DB) http.HandlerFunc {
             WHERE id = $1
         `, userID)
 
-        if err != nil {
-            log.Printf("Error upgrading account for user %d: %v", userID, err)
-            responses.SendErrorResponse(w, http.StatusInternalServerError, "Failed to upgrade account")
-            return
-        }
+		if err != nil {
+			log.Printf("Error upgrading account for user %d: %v", userID, err)
+			responses.SendErrorResponse(w, http.StatusInternalServerError, "Failed to upgrade account")
+			return
+		}
 
-        rowsAffected, _ := result.RowsAffected()
-        if rowsAffected == 0 {
-            responses.SendErrorResponse(w, http.StatusNotFound, "User not found")
-            return
-        }
+		rowsAffected, _ := result.RowsAffected()
+		if rowsAffected == 0 {
+			responses.SendErrorResponse(w, http.StatusNotFound, "User not found")
+			return
+		}
 
-        responses.SendSuccessResponse(w, http.StatusOK, map[string]string{
-            "message": "Account upgraded to paid successfully. You now have access to all CCTVs.",
-        })
-    }
+		responses.SendSuccessResponse(w, http.StatusOK, map[string]string{
+			"message": "Account upgraded to paid successfully. You now have access to all CCTVs.",
+		})
+	}
 }
-
 
 func RateLimitMiddleware(limiter *rate.Limiter) func(http.HandlerFunc) http.HandlerFunc {
 	return func(next http.HandlerFunc) http.HandlerFunc {
@@ -298,6 +323,31 @@ func ConfirmDeviceReset(db *sql.DB) http.HandlerFunc {
 
 		responses.SendSuccessResponse(w, http.StatusOK, map[string]string{
 			"message": "Device reset successful. You can now login from a new device.",
+		})
+	}
+}
+func Logout(db *sql.DB) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		claims, ok := r.Context().Value(userClaimsKey).(*utils.Claims)
+		if !ok {
+			responses.SendErrorResponse(w, http.StatusUnauthorized, "Invalid user context")
+			return
+		}
+		userID := claims.UserID
+
+		// Clear session token
+		_, err := db.Exec(`
+			UPDATE users 
+			SET session_token = NULL 
+			WHERE id = $1
+		`, userID)
+		if err != nil {
+			responses.SendErrorResponse(w, http.StatusInternalServerError, "Failed to logout")
+			return
+		}
+
+		responses.SendSuccessResponse(w, http.StatusOK, map[string]string{
+			"message": "Logged out successfully",
 		})
 	}
 }

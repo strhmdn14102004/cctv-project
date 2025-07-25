@@ -36,11 +36,18 @@ func JWTMiddleware(jwtUtil *utils.JWTUtil) func(http.Handler) http.Handler {
 				return
 			}
 
+			// Verify token matches the one in database
+			var dbToken string
+			err = jwtUtil.DB.QueryRow("SELECT session_token FROM users WHERE id = $1", claims.UserID).Scan(&dbToken)
+			if err != nil || dbToken != tokenString {
+				responses.SendErrorResponse(w, http.StatusUnauthorized, "Token mismatch - possibly logged in from another device")
+				return
+			}
+
 			ctx := context.WithValue(r.Context(), userClaimsKey, claims)
 			ctx = context.WithValue(ctx, "userID", claims.UserID)
 			ctx = context.WithValue(ctx, "userRole", claims.Role)
 			r = r.WithContext(ctx)
-
 
 			next.ServeHTTP(w, r)
 		})

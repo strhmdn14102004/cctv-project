@@ -1,6 +1,7 @@
 package utils
 
 import (
+	"database/sql"
 	"time"
 
 	"github.com/dgrijalva/jwt-go"
@@ -9,12 +10,14 @@ import (
 type JWTUtil struct {
 	secretKey  string
 	expiration time.Duration
+	DB         *sql.DB
 }
 
-func NewJWTUtil(secretKey string, expiration time.Duration) *JWTUtil {
+func NewJWTUtil(secretKey string, expiration time.Duration, db *sql.DB) *JWTUtil {
 	return &JWTUtil{
 		secretKey:  secretKey,
 		expiration: expiration,
+		DB:         db,
 	}
 }
 
